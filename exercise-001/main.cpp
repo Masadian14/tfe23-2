@@ -1,8 +1,13 @@
 #include <fmt/chrono.h>
 #include <fmt/format.h>
+#include <random>
+#include <vector>
+#include <ctime>
+#include <cstdlib>
+#include <algorithm>
 
 #include "CLI/CLI.hpp"
-#include "config.h.in"
+#include "config.h"
 
 auto main(int argc, char **argv) -> int
 {
@@ -12,16 +17,15 @@ auto main(int argc, char **argv) -> int
      */
     CLI::App app{PROJECT_NAME};
 
-    int count = 20;
     
-    app.add_option("-c,--count", count, "How many items to insert");
 
+    auto counter(20);
     
+   
     try
-    {
-        
+    {   
+        app.add_option("-c,--count", counter, "How many items to insert");
 
-        
         app.set_version_flag("-V,--version", fmt::format("{} {}", PROJECT_VER, PROJECT_BUILD_DATE));
         app.parse(argc, argv);
     }
@@ -30,14 +34,35 @@ auto main(int argc, char **argv) -> int
         return app.exit(e);
     }
 
-    /**
-     * The {fmt} lib is a cross platform library for printing and formatting text
-     * it is much more convenient than std::cout and printf
-     * More info at https://fmt.dev/latest/api.html
-     */
+    auto start = std::chrono::system_clock::now();
+
+    std::vector<int> numbers(counter);
+
+    srand(time(0));
+
+    for (int &number : numbers)
+    {
+        number = rand() % 100 + 1;
+    }
+
+    std::sort(numbers.begin(), numbers.end());
+
+    auto end = std::chrono::system_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+
+    fmt::print("Elapsed time: {} ms\n", elapsed.count());
+
+    fmt::print("Numbers: ");
+    for (const auto &number : numbers)
+    {
+        fmt::print("{} ", number);
+    }
+
     fmt::print("Hello, {}!\n", app.get_name());
 
-    fmt::print("Count: {}\n", count);
+    fmt::print("Count: {}\n", counter);
+
+    
 
     return 0; /* exit gracefully*/
 }
