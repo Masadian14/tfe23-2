@@ -1,83 +1,158 @@
-
-// For HTML requests
+#include <iostream>
+#include <string>
 #include <curl/curl.h>
-#include <fmt/chrono.h>
-#include <fmt/format.h>
-
 #include <nlohmann/json.hpp>
 
-#include "CLI/CLI.hpp"
-#include "config.h"
-
-// for convenience
-using json = nlohmann::json;
-
-// Callback for CURL
-static size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp)
-{
-    ((std::string *)userp)->append((char *)contents, size * nmemb);
+// Callback-Funktion für libcurl zum Speichern der HTTP-Antwort in einem String
+size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
+    ((std::string*)userp)->append((char*)contents, size * nmemb);
     return size * nmemb;
 }
 
-auto main(int argc, char **argv) -> int
-{
-    // CURL stuff
-    CURL *curl;
+// Funktion zum Abrufen der Spritpreise
+std::string getFuelPrices(const std::string& apiKey, const std::string& lat, const std::string& lng, const std::string& radius, const std::string& fuelType) {
+    CURL* curl;
     CURLcode res;
+    std::string readBuffer;
 
-    /**
-     * CLI11 is a command line parser to add command line options
-     * More info at https://github.com/CLIUtils/CLI11#usage
-     */
-    CLI::App app{PROJECT_NAME};
-    try
-    {
-        app.set_version_flag("-V,--version", fmt::format("{} {}", PROJECT_VER, PROJECT_BUILD_DATE));
-        app.parse(argc, argv);
-    }
-    catch (const CLI::ParseError &e)
-    {
-        return app.exit(e);
-    }
-
-    /**
-     * The {fmt} lib is a cross platform library for printing and formatting text
-     * it is much more convenient than std::cout and printf
-     * More info at https://fmt.dev/latest/api.html
-     */
-    fmt::print("Hello, {}!\n", app.get_name());
-
-    // Perform an HTTP request
-
-    curl_global_init(CURL_GLOBAL_DEFAULT);
     curl = curl_easy_init();
-    if (curl)
-    {
-        std::string readBuffer;
-        curl_easy_setopt(curl, CURLOPT_URL, "https://example.com/");
+    if (curl) {
+        std::string url = "https://creativecommons.tankerkoenig.de/json/list.php?lat=" + lat 
+                        + "&lng=" + lng + "&rad=" + radius + "&sort=price&type=" + fuelType + "&apikey=" + apiKey;
+        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
-
-        /* cache the CA cert bundle in memory for a week */
-        curl_easy_setopt(curl, CURLOPT_CA_CACHE_TIMEOUT, 604800L);
-
-        /* Perform the request, res will get the return code */
         res = curl_easy_perform(curl);
-        /* Check for errors */
-        if (res != CURLE_OK)
-        {
-            fmt::println("curl_easy_perform() failed: {}", curl_easy_strerror(res));
-        }
-        else
-        {
-            fmt::println("{}", readBuffer);
-        }
-
-        /* always cleanup */
         curl_easy_cleanup(curl);
     }
+    return readBuffer;
+}
 
-    curl_global_cleanup();
+// Funktion zum Abrufen der Details einer Tankstelle
+std::string getStationDetails(const std::string& apiKey, const std::string& stationId) {
+    CURL* curl;
+    CURLcode res;
+    std::string readBuffer;
 
-    return 0; /* exit gracefully*/
+    curl = curl_easy_init();
+    if (curl) {
+        std::string url = "https://creativecommons.tankerkoenig.de/json/detail.php?id=" + stationId + "&apikey=" + apiKey;
+        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+        res = curl_easy_perform(curl);
+        curl_easy_cleanup(curl);
+    }
+    return readBuffer;
+}
+
+// Funktion zum Senden einer E-Mail mit libcurl
+void sendEmailNotification(const std::string& recipient, const std::string& subject, const std::string& message) {
+    CURL* curl;
+    CURLcode res;
+
+    struct curl_slist* recipients = NULL;
+    const char* payload_text = message.c_str();
+
+    curl = curl_easy_init();
+    if (curl) {
+        curl_easy_setopt(curl, CURLOPT_USERNAME, "nichtsnichts68@gmail.com"); // Ihre Gmail-Adresse
+        curl_easy_setopt(curl, CURLOPT_PASSWORD, "bowduz-titbid-1cyxdU"); // Ihr Gmail-App-Passwort
+        curl_easy_setopt(curl, CURLOPT_URL, "smtp://smtp.gmail.com:587"); // SMTP-Server und Port für Gmail
+
+        curl_easy_setopt(curl, CURLOPT_MAIL_FROM, "<nichtsnichts68@gmail.com>");
+        recipients = curl_slist_append(recipients, recipient.c_str());
+        curl_easy_setopt(curl, CURLOPT_MAIL_RCPT, recipients);
+
+        // E-Mail-Nachricht formatieren
+        std::string emailData = "To: " + recipient + "\r\n" +
+                                "From: <nichtsnichts68@gmail.com>\r\n" +
+                                "Subject: " + subject + "\r\n" +
+                                "\r\n" + message + "\r\n";
+
+        curl_easy_setopt(curl, CURLOPT_READFUNCTION, [](void *ptr, size_t size, size_t nmemb, void *userp) -> size_t {
+            std::string* data = reinterpret_cast<std::string*>(userp);
+            size_t len = data->size() < size * nmemb ? data->size() : size * nmemb;
+            memcpy(ptr, data->c_str(), len);
+            data->erase(0, len);
+            return len;
+        });
+
+        curl_easy_setopt(curl, CURLOPT_READDATA, &emailData);
+        curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L);
+
+        res = curl_easy_perform(curl);
+        if (res != CURLE_OK)
+            fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+
+        curl_slist_free_all(recipients);
+        curl_easy_cleanup(curl);
+    }
+}
+
+// Funktion zum Senden einer MQTT-Nachricht
+void sendMQTTNotification(const std::string& topic, const std::string& message) {
+    // Implementieren Sie hier die Logik zum Senden einer MQTT-Nachricht
+    // Dies kann über eine MQTT-Bibliothek wie Paho MQTT erfolgen
+    // (Hinweis: Dies ist ein Platzhalter für die MQTT-Benachrichtigung)
+    std::cout << "Sending MQTT message to topic " << topic << std::endl;
+    std::cout << "Message: " << message << std::endl;
+}
+
+int main() {
+    std::string apiKey = "6548316a-6bce-f3cc-b70d-5560b29485aa";
+    std::string lat = "47.6561"; // Breitengrad für Friedrichshafen
+    std::string lng = "9.4797";  // Längengrad für Friedrichshafen
+    std::string radius = "4"; // Radius in Kilometern
+    std::string fuelType = "diesel"; // Kraftstofftyp: diesel, e5, e10
+
+    // Abrufen der Tankstellenliste
+    std::string fuelPricesResponse = getFuelPrices(apiKey, lat, lng, radius, fuelType);
+    auto fuelPricesJson = nlohmann::json::parse(fuelPricesResponse);
+
+    if (fuelPricesJson.contains("ok") && fuelPricesJson["ok"]) {
+        auto stations = fuelPricesJson["stations"];
+        double minPrice = std::numeric_limits<double>::max();
+        nlohmann::json cheapestStation;
+
+        for (const auto& station : stations) {
+            if (station.contains("price") && station["price"] < minPrice) {
+                minPrice = station["price"];
+                cheapestStation = station;
+            }
+        }
+
+        if (!cheapestStation.empty()) {
+            std::cout << "Cheapest Station: " << cheapestStation["name"] 
+                      << " at " << cheapestStation["place"] 
+                      << " with price: " << cheapestStation["price"] << std::endl;
+
+            // Abrufen der Details der günstigsten Tankstelle
+            std::string stationId = cheapestStation["id"];
+            std::string stationDetailsResponse = getStationDetails(apiKey, stationId);
+            auto stationDetailsJson = nlohmann::json::parse(stationDetailsResponse);
+
+            if (stationDetailsJson.contains("ok") && stationDetailsJson["ok"]) {
+                std::cout << "Station Details: " << stationDetailsJson.dump(4) << std::endl;
+                
+                // Benachrichtigung senden
+                std::string emailRecipient = "maxikom@hotmail.com";
+                std::string emailSubject = "Günstigste Tankstelle gefunden";
+                std::string emailMessage = "Die günstigste Tankstelle ist " + cheapestStation["name"].get<std::string>() + " mit einem Preis von " + std::to_string(cheapestStation["price"].get<double>()) + " EUR.";
+                sendEmailNotification(emailRecipient, emailSubject, emailMessage);
+
+                std::string mqttTopic = "fuel/prices";
+                std::string mqttMessage = "Die günstigste Tankstelle ist " + cheapestStation["name"].get<std::string>() + " mit einem Preis von " + std::to_string(cheapestStation["price"].get<double>()) + " EUR.";
+                sendMQTTNotification(mqttTopic, mqttMessage);
+            } else {
+                std::cerr << "Error: " << stationDetailsJson["message"] << std::endl;
+            }
+        } else {
+            std::cout << "No stations found." << std::endl;
+        }
+    } else {
+        std::cerr << "Error: " << fuelPricesJson["message"] << std::endl;
+    }
+
+    return 0;
 }
