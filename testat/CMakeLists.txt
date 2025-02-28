@@ -30,3 +30,16 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
                                         nlohmann_json::nlohmann_json
                                         CURL::libcurl
 )
+project(my_project)
+
+# Manually set the path to the Paho MQTT C library
+set(PahoMqttC_DIR /usr/local/lib/cmake/PahoMqttC)
+find_package(PahoMqttC REQUIRED)
+
+# Find the Paho MQTT C++ library
+find_package(PahoMqttCpp REQUIRED)
+
+add_executable(my_project main.cpp)
+
+# Link the Paho MQTT libraries
+target_link_libraries(my_project PahoMqttC::paho-mqtt3as PahoMqttCpp::paho-mqttpp3)

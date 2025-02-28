@@ -106,7 +106,12 @@
         "shared_mutex": "cpp",
         "compare": "cpp",
         "concepts": "cpp",
-        "numbers": "cpp"
+        "numbers": "cpp",
+        "any": "cpp",
+        "forward_list": "cpp",
+        "ranges": "cpp",
+        "span": "cpp",
+        "valarray": "cpp"
     },
     "cSpell.language": "en,en-GB,de,de-DE",
     "cSpell.words": [
