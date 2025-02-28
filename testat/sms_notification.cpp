@@ -1,26 +1,28 @@
-#include "sms_notification.h"
-#include <curl/curl.h>
 #include <iostream>
+#include <curl/curl.h>
+#include "sms_notification.h"
 
-void sendSMS(const std::string& recipient, const std::string& message) {
-    std::string apiKey = "60d33150";
-    std::string apiSecret = "3rzWDIQj8iJayorA";
-    std::string fromNumber = "015117204987";
-
+// Funktion zum Senden einer SMS-Benachrichtigung über Nexmo API
+void sendSMSNotification(const std::string& phoneNumber, const std::string& message) {
     CURL* curl;
     CURLcode res;
 
     curl = curl_easy_init();
     if (curl) {
+        std::string apiKey = "60d33150";
+        std::string apiSecret = "3rzWDIQj8iJayorA";
+        std::string from = "MaxisTank";
+
         std::string url = "https://rest.nexmo.com/sms/json";
-        std::string postFields = "api_key=" + apiKey + "&api_secret=" + apiSecret + "&to=" + recipient + "&from=" + fromNumber + "&text=" + message;
+        std::string postFields = "api_key=" + apiKey + "&api_secret=" + apiSecret + "&to=" + phoneNumber + "&from=" + from + "&text=" + curl_easy_escape(curl, message.c_str(), message.length());
 
         curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postFields.c_str());
 
         res = curl_easy_perform(curl);
-        if (res != CURLE_OK)
-            fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+        if (res != CURLE_OK) {
+            std::cerr << "curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
+        }
 
         curl_easy_cleanup(curl);
     }

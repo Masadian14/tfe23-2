@@ -1,10 +1,9 @@
-#include "email_notification.h"
-#include "sms_notification.h"
-#include "mqtt_notification.h"
 #include <iostream>
 #include <string>
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
+#include "sms_notification.h"
+#include "email_notification.h"
 
 // Callback-Funktion für libcurl zum Speichern der HTTP-Antwort in einem String
 size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
@@ -85,18 +84,16 @@ int main() {
             if (stationDetailsJson.contains("ok") && stationDetailsJson["ok"]) {
                 std::cout << "Station Details: " << stationDetailsJson.dump(4) << std::endl;
                 
-                // Benachrichtigung senden
-                std::string emailRecipient = "maxikom@hotmail.com";
+                // Benachrichtigung per SMS senden
+                std::string phoneNumber = "+491234567890"; // Beispiel-Telefonnummer
+                std::string smsMessage = "Die günstigste Tankstelle ist " + cheapestStation["name"].get<std::string>() + " mit einem Preis von " + std::to_string(cheapestStation["price"].get<double>()) + " EUR.";
+                sendSMSNotification(phoneNumber, smsMessage);
+
+                // Benachrichtigung per E-Mail senden
+                std::string emailRecipient = "maxikom@hotmail.com"; // Beispiel-E-Mail-Adresse
                 std::string emailSubject = "Günstigste Tankstelle gefunden";
-                std::string emailMessage = "Die günstigste Tankstelle ist " + cheapestStation["name"].get<std::string>() + " mit einem Preis von " + std::to_string(cheapestStation["price"].get<double>()) + " EUR.";
-                sendEmailNotification(emailRecipient, emailSubject, emailMessage);
-
-                std::string mqttTopic = "fuel/prices";
-                std::string mqttMessage = "Die günstigste Tankstelle ist " + cheapestStation["name"].get<std::string>() + " mit einem Preis von " + std::to_string(cheapestStation["price"].get<double>()) + " EUR.";
-                sendMQTTNotification(mqttTopic, mqttMessage);
-
-                std::string smsRecipient = "+1234567890"; // Telefonnummer des Empfängers
-                sendSMS(smsRecipient, emailMessage);
+                std::string emailBody = "Die günstigste Tankstelle ist " + cheapestStation["name"].get<std::string>() + " mit einem Preis von " + std::to_string(cheapestStation["price"].get<double>()) + " EUR.";
+                sendEmailNotification(emailRecipient, emailSubject, emailBody);
             } else {
                 std::cerr << "Error: " << stationDetailsJson["message"] << std::endl;
             }
