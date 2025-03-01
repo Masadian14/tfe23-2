@@ -4,6 +4,7 @@
 #include <nlohmann/json.hpp>
 #include "sms_notification.h"
 #include "email_notification.h"
+#include "mqtt_notification.h"
 
 // Callback-Funktion für libcurl zum Speichern der HTTP-Antwort in einem String
 size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
@@ -94,6 +95,13 @@ int main() {
                 std::string emailSubject = "Günstigste Tankstelle gefunden";
                 std::string emailBody = "Die günstigste Tankstelle ist " + cheapestStation["name"].get<std::string>() + " mit einem Preis von " + std::to_string(cheapestStation["price"].get<double>()) + " EUR.";
                 sendEmailNotification(emailRecipient, emailSubject, emailBody);
+
+                // Benachrichtigung per MQTT senden
+                std::string mqttTopic = "fuel/cheapest_station";
+                std::string mqttMessage = "Die günstigste Tankstelle ist " + cheapestStation["name"].get<std::string>() +
+                          " mit einem Preis von " + std::to_string(cheapestStation["price"].get<double>()) + " EUR.";
+                sendMQTTNotification(mqttTopic, mqttMessage);
+                
             } else {
                 std::cerr << "Error: " << stationDetailsJson["message"] << std::endl;
             }
