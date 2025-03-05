@@ -4,6 +4,6 @@
 #include <string>
 
 // Deklaration der Funktion zum Senden einer SMS-Benachrichtigung
-void sendSMSNotification(const std::string& phoneNumber, const std::string& message);
+void smsnotification(const std::string& phoneNumber, const std::string& message);
 
 #endif // SMS_NOTIFICATION_H
