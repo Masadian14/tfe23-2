@@ -1,4 +1,4 @@
-#include <iostream>
+/*#include <iostream>
 #include <curl/curl.h>
 #include <cstring>
 #include "email_notification.h"
@@ -15,6 +15,7 @@
  * @param userp Pointer to the email data (provided by the caller).
  * @return The number of bytes sent.
  */
+/*
 size_t payload_source(void *ptr, size_t size, size_t nmemb, void *userp) {
     std::string* data = reinterpret_cast<std::string*>(userp);
     size_t len = data->size() < size * nmemb ? data->size() : size * nmemb;
@@ -34,6 +35,7 @@ size_t payload_source(void *ptr, size_t size, size_t nmemb, void *userp) {
  * @param subject The subject of the email.
  * @param message The body content of the email.
  */
+/*
 void emailnotification(const std::string& recipient, const std::string& subject, const std::string& message) {
     CURL* curl;
     CURLcode res;
@@ -86,6 +88,82 @@ void emailnotification(const std::string& recipient, const std::string& subject,
         }
 
         // Free recipients list and clean up
+        curl_slist_free_all(recipients);
+        curl_easy_cleanup(curl);
+    }
+}
+*/
+
+#include <iostream>
+#include <curl/curl.h>
+#include <cstring>
+#include "email_notification.h"  // <-- Wieder eingefügt!
+
+/**
+ * @brief Callback function for libcurl to send the email payload.
+ */
+size_t payload_source(void *ptr, size_t size, size_t nmemb, void *userp) {
+    std::string* data = reinterpret_cast<std::string*>(userp);
+    size_t len = data->size() < size * nmemb ? data->size() : size * nmemb;
+    memcpy(ptr, data->c_str(), len);
+    data->erase(0, len);
+    return len;
+}
+
+/**
+ * @brief Sends an email notification using the Gmail SMTP server.
+ */
+void emailnotification(const std::string& recipient, const std::string& subject, const std::string& message) {
+    CURL* curl;
+    CURLcode res;
+    struct curl_slist* recipients = NULL;
+
+    std::string senderEmail, appPassword;
+
+    // E-Mail-Adresse und Passwort vom Benutzer abfragen
+    std::cout << "Bitte geben Sie Ihre Gmail-Adresse ein: ";
+    std::getline(std::cin, senderEmail);
+
+    std::cout << "Bitte geben Sie Ihr App-Passwort ein: ";
+    std::getline(std::cin, appPassword);
+
+    curl = curl_easy_init();
+    if (curl) {
+        // Gmail SMTP Server
+        curl_easy_setopt(curl, CURLOPT_URL, "smtp://smtp.gmail.com:587");
+        curl_easy_setopt(curl, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL); // TLS aktivieren
+
+        // Login-Daten
+        curl_easy_setopt(curl, CURLOPT_USERNAME, senderEmail.c_str());
+        curl_easy_setopt(curl, CURLOPT_PASSWORD, appPassword.c_str());
+
+        // Absender und Empfänger
+        curl_easy_setopt(curl, CURLOPT_MAIL_FROM, ("<" + senderEmail + ">").c_str());
+        recipients = curl_slist_append(recipients, recipient.c_str());
+        curl_easy_setopt(curl, CURLOPT_MAIL_RCPT, recipients);
+
+        // Formatierte E-Mail-Nachricht
+        std::string emaildata = "To: " + recipient + "\r\n" +
+                                "From: <" + senderEmail + ">\r\n" +
+                                "Subject: " + subject + "\r\n" +
+                                "\r\n" + message + "\r\n";
+
+        curl_easy_setopt(curl, CURLOPT_READFUNCTION, payload_source);
+        curl_easy_setopt(curl, CURLOPT_READDATA, &emaildata);
+        curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L);
+
+        // Debugging aktivieren
+        curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+
+        // E-Mail senden
+        res = curl_easy_perform(curl);
+        if (res != CURLE_OK) {
+            std::cerr << "Fehler beim Senden der E-Mail: " << curl_easy_strerror(res) << std::endl;
+        } else {
+            std::cout << "E-Mail erfolgreich gesendet!" << std::endl;
+        }
+
+        // Cleanup
         curl_slist_free_all(recipients);
         curl_easy_cleanup(curl);
     }

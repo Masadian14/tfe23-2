@@ -2,7 +2,7 @@
  * @file main.cpp
  * @brief Program to determine the cheapest gas station within a specified area.
  */
-
+/*
  #include <iostream>
  #include <string>
  #include <curl/curl.h>
@@ -19,7 +19,7 @@
  * @param userData Pointer to the string where the response will be stored.
  * @return Total size of the received data.
  */
-
+/*
  size_t handleresponse(void* contents, size_t size, size_t nmemb, void* userp) {
      ((std::string*)userp)->append((char*)contents, size * nmemb);
      return size * nmemb;
@@ -35,7 +35,7 @@
  * @param fuelType Type of fuel (e.g., diesel, e5, e10).
  * @return JSON string containing the API response.
  */
-
+/*
  std::string fuelprices(const std::string& apiKey, const std::string& lat, const std::string& lng, const std::string& radius, const std::string& fuelType) {
      CURL* curl;
      CURLcode res;
@@ -61,7 +61,7 @@
  * @param stationId Unique ID of the gas station.
  * @return JSON string containing gas station details.
  */
-
+/*
  std::string stationdetails(const std::string& apiKey, const std::string& stationId) {
      CURL* curl;
      CURLcode res;
@@ -83,7 +83,7 @@
  * @brief Main program to find the cheapest gas station and send notifications.
  * @return 0 if the program runs successfully, otherwise an error code.
  */
-
+/*
  int main() {
      std::string apiKey = "6548316a-6bce-f3cc-b70d-5560b29485aa";
      std::string lat = "47.6561"; // latitude for friedrichshafen
@@ -152,4 +152,265 @@
  
      return 0;
  }
- 
+ */
+
+ /*#include <iostream>
+#include <string>
+#include <curl/curl.h>
+#include <nlohmann/json.hpp>
+#include "sms_notification.h"
+#include "email_notification.h"
+#include "mqtt_notification.h"
+
+size_t handleresponse(void* contents, size_t size, size_t nmemb, void* userp) {
+    ((std::string*)userp)->append((char*)contents, size * nmemb);
+    return size * nmemb;
+}
+
+std::string fuelprices(const std::string& apiKey, const std::string& lat, const std::string& lng, const std::string& radius, const std::string& fuelType) {
+    CURL* curl;
+    CURLcode res;
+    std::string readBuffer;
+
+    curl = curl_easy_init();
+    if (curl) {
+        std::string url = "https://creativecommons.tankerkoenig.de/json/list.php?lat=" + lat 
+                        + "&lng=" + lng + "&rad=" + radius + "&sort=price&type=" + fuelType + "&apikey=" + apiKey;
+        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, handleresponse);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+        res = curl_easy_perform(curl);
+        curl_easy_cleanup(curl);
+    }
+    return readBuffer;
+}
+
+std::string stationdetails(const std::string& apiKey, const std::string& stationId) {
+    CURL* curl;
+    CURLcode res;
+    std::string readBuffer;
+
+    curl = curl_easy_init();
+    if (curl) {
+        std::string url = "https://creativecommons.tankerkoenig.de/json/detail.php?id=" + stationId + "&apikey=" + apiKey;
+        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, handleresponse);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+        res = curl_easy_perform(curl);
+        curl_easy_cleanup(curl);
+    }
+    return readBuffer;
+}
+
+int main() {
+    std::string apiKey, phoneNumber, emailRecipient;
+    
+    // API Key vom Benutzer abfragen
+    std::cout << "Bitte geben Sie Ihren Tankerkönig API Key ein: ";
+    std::getline(std::cin, apiKey);
+    
+    // Benutzereingabe für Telefonnummer und E-Mail-Adresse
+    std::cout << "Bitte geben Sie Ihre Telefonnummer für SMS-Benachrichtigungen ein: ";
+    std::getline(std::cin, phoneNumber);
+    
+    std::cout << "Bitte geben Sie Ihre E-Mail-Adresse für Benachrichtigungen ein: ";
+    std::getline(std::cin, emailRecipient);
+
+    std::string lat = "47.6561"; 
+    std::string lng = "9.4797";  
+    std::string radius = "4"; 
+    std::string fuelType = "diesel"; 
+
+    std::string fuelpricesresponse = fuelprices(apiKey, lat, lng, radius, fuelType);
+    auto fuelpricesjson = nlohmann::json::parse(fuelpricesresponse);
+
+    if (fuelpricesjson.contains("ok") && fuelpricesjson["ok"]) {
+        auto stations = fuelpricesjson["stations"];
+        double minPrice = std::numeric_limits<double>::max();
+        nlohmann::json cheapestStation;
+
+        for (const auto& station : stations) {
+            if (station.contains("price") && station["price"] < minPrice) {
+                minPrice = station["price"];
+                cheapestStation = station;
+            }
+        }
+
+        if (!cheapestStation.empty()) {
+            std::cout << "Cheapest Station: " << cheapestStation["name"] 
+                      << " at " << cheapestStation["place"] 
+                      << " with price: " << cheapestStation["price"] << " EUR" << std::endl;
+
+            std::string stationId = cheapestStation["id"];
+            std::string stationDetailsResponse = stationdetails(apiKey, stationId);
+            auto stationDetailsJson = nlohmann::json::parse(stationDetailsResponse);
+
+            if (stationDetailsJson.contains("ok") && stationDetailsJson["ok"]) {
+                std::cout << "Station Details: " << stationDetailsJson.dump(4) << std::endl;
+
+                std::string notificationMessage = "Die günstigste Tankstelle ist " + cheapestStation["name"].get<std::string>() + 
+                                                  " mit einem Preis von " + std::to_string(cheapestStation["price"].get<double>()) + " EUR.";
+
+                // SMS-Benachrichtigung senden
+                smsnotification(phoneNumber, notificationMessage);
+
+                // E-Mail-Benachrichtigung senden
+                std::string emailSubject = "Günstigste Tankstelle gefunden";
+                emailnotification(emailRecipient, emailSubject, notificationMessage);
+
+                // MQTT-Benachrichtigung senden
+                std::string mqttTopic = "fuel/cheapest_station";
+                mqttnotification(mqttTopic, notificationMessage);
+
+            } else {
+                std::cerr << "Error: " << stationDetailsJson["message"] << std::endl;
+            }
+        } else {
+            std::cout << "No stations found." << std::endl;
+        }
+    } else {
+        std::cerr << "Error: " << fuelpricesjson["message"] << std::endl;
+    }
+
+    return 0;
+}
+*/
+
+#include <iostream>
+#include <string>
+#include <chrono>
+#include <thread>
+#include <curl/curl.h>
+#include <nlohmann/json.hpp>
+#include "sms_notification.h"
+#include "email_notification.h"
+#include "mqtt_notification.h"
+
+
+
+size_t handleresponse(void* contents, size_t size, size_t nmemb, void* userp) {
+    ((std::string*)userp)->append((char*)contents, size * nmemb);
+    return size * nmemb;
+}
+
+std::string fuelprices(const std::string& apiKey, const std::string& lat, const std::string& lng, const std::string& radius, const std::string& fuelType) {
+    CURL* curl;
+    CURLcode res;
+    std::string readBuffer;
+
+    curl = curl_easy_init();
+    if (curl) {
+        std::string url = "https://creativecommons.tankerkoenig.de/json/list.php?lat=" + lat 
+                        + "&lng=" + lng + "&rad=" + radius + "&sort=price&type=" + fuelType + "&apikey=" + apiKey;
+        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, handleresponse);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+        res = curl_easy_perform(curl);
+        curl_easy_cleanup(curl);
+    }
+    return readBuffer;
+}
+
+std::string stationdetails(const std::string& apiKey, const std::string& stationId) {
+    CURL* curl;
+    CURLcode res;
+    std::string readBuffer;
+
+    curl = curl_easy_init();
+    if (curl) {
+        std::string url = "https://creativecommons.tankerkoenig.de/json/detail.php?id=" + stationId + "&apikey=" + apiKey;
+        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, handleresponse);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+        res = curl_easy_perform(curl);
+        curl_easy_cleanup(curl);
+    }
+    return readBuffer;
+}
+
+void countdown(int seconds) {
+    for (int i = seconds; i > 0; --i) {
+        std::cout << "\rNächste Anfrage in: " << i << " Sekunden...  " << std::flush;
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+    std::cout << "\nSie können jetzt eine neue Anfrage senden!\n";
+}
+
+int main() {
+    std::string apiKey, phoneNumber, emailRecipient;
+    
+    // API Key vom Benutzer abfragen
+    std::cout << "Bitte geben Sie Ihren Tankerkönig API Key ein: ";
+    std::getline(std::cin, apiKey);
+    
+    // Benutzereingabe für Telefonnummer und E-Mail-Adresse
+    std::cout << "Bitte geben Sie Ihre Telefonnummer für SMS-Benachrichtigungen ein: ";
+    std::getline(std::cin, phoneNumber);
+    
+    std::cout << "Bitte geben Sie Ihre E-Mail-Adresse für Benachrichtigungen ein: ";
+    std::getline(std::cin, emailRecipient);
+
+    std::string lat = "47.6561"; 
+    std::string lng = "9.4797";  
+    std::string radius = "4"; 
+    std::string fuelType = "diesel"; 
+
+    while (true) {
+        std::string fuelpricesresponse = fuelprices(apiKey, lat, lng, radius, fuelType);
+        auto fuelpricesjson = nlohmann::json::parse(fuelpricesresponse);
+
+        if (fuelpricesjson.contains("ok") && fuelpricesjson["ok"]) {
+            auto stations = fuelpricesjson["stations"];
+            double minPrice = std::numeric_limits<double>::max();
+            nlohmann::json cheapestStation;
+
+            for (const auto& station : stations) {
+                if (station.contains("price") && station["price"] < minPrice) {
+                    minPrice = station["price"];
+                    cheapestStation = station;
+                }
+            }
+
+            if (!cheapestStation.empty()) {
+                std::cout << "Cheapest Station: " << cheapestStation["name"] 
+                          << " at " << cheapestStation["place"] 
+                          << " with price: " << cheapestStation["price"] << " EUR" << std::endl;
+
+                std::string stationId = cheapestStation["id"];
+                std::string stationDetailsResponse = stationdetails(apiKey, stationId);
+                auto stationDetailsJson = nlohmann::json::parse(stationDetailsResponse);
+
+                if (stationDetailsJson.contains("ok") && stationDetailsJson["ok"]) {
+                    std::cout << "Station Details: " << stationDetailsJson.dump(4) << std::endl;
+
+                    std::string notificationMessage = "Die günstigste Tankstelle ist " + cheapestStation["name"].get<std::string>() + 
+                                                      " mit einem Preis von " + std::to_string(cheapestStation["price"].get<double>()) + " EUR.";
+
+                    // SMS-Benachrichtigung senden
+                    smsnotification(phoneNumber, notificationMessage);
+
+                    // E-Mail-Benachrichtigung senden
+                    std::string emailSubject = "Günstigste Tankstelle gefunden";
+                    emailnotification(emailRecipient, emailSubject, notificationMessage);
+
+                    // MQTT-Benachrichtigung senden
+                    std::string mqttTopic = "fuel/cheapest_station";
+                    mqttnotification(mqttTopic, notificationMessage);
+
+                } else {
+                    std::cerr << "Error: " << stationDetailsJson["message"] << std::endl;
+                }
+            } else {
+                std::cout << "No stations found." << std::endl;
+            }
+        } else {
+            std::cerr << "Error: " << fuelpricesjson["message"] << std::endl;
+        }
+
+        // Countdown von 5 Minuten (300 Sekunden)
+        countdown(300);
+    }
+
+    return 0;
+}
+
