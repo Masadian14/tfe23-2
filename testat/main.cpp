@@ -358,45 +358,44 @@ int main() {
     while (true) {
         std::string fuelpricesresponse = fuelprices(apiKey, lat, lng, radius, fuelType);
         auto fuelpricesjson = nlohmann::json::parse(fuelpricesresponse);
-
+    
         if (fuelpricesjson.contains("ok") && fuelpricesjson["ok"]) {
             auto stations = fuelpricesjson["stations"];
             double minPrice = std::numeric_limits<double>::max();
             nlohmann::json cheapestStation;
-
+    
             for (const auto& station : stations) {
                 if (station.contains("price") && station["price"] < minPrice) {
                     minPrice = station["price"];
                     cheapestStation = station;
                 }
             }
-
+    
             if (!cheapestStation.empty()) {
                 std::cout << "Cheapest Station: " << cheapestStation["name"] 
                           << " at " << cheapestStation["place"] 
                           << " with price: " << cheapestStation["price"] << " EUR" << std::endl;
-
+    
                 std::string stationId = cheapestStation["id"];
                 std::string stationDetailsResponse = stationdetails(apiKey, stationId);
                 auto stationDetailsJson = nlohmann::json::parse(stationDetailsResponse);
-
+    
                 if (stationDetailsJson.contains("ok") && stationDetailsJson["ok"]) {
                     std::cout << "Station Details: " << stationDetailsJson.dump(4) << std::endl;
-
+    
                     std::string notificationMessage = "Die günstigste Tankstelle ist " + cheapestStation["name"].get<std::string>() + 
                                                       " mit einem Preis von " + std::to_string(cheapestStation["price"].get<double>()) + " EUR.";
-
+    
                     // SMS-Benachrichtigung senden
                     smsnotification(phoneNumber, notificationMessage);
-
+    
                     // E-Mail-Benachrichtigung senden
                     std::string emailSubject = "Günstigste Tankstelle gefunden";
                     emailnotification(emailRecipient, emailSubject, notificationMessage);
-
+    
                     // MQTT-Benachrichtigung senden
                     std::string mqttTopic = "fuel/cheapest_station";
                     mqttnotification(mqttTopic, notificationMessage);
-
                 } else {
                     std::cerr << "Error: " << stationDetailsJson["message"] << std::endl;
                 }
@@ -406,11 +405,35 @@ int main() {
         } else {
             std::cerr << "Error: " << fuelpricesjson["message"] << std::endl;
         }
-
-        // Countdown von 5 Minuten (300 Sekunden)
-        countdown(300);
+    
+        // Countdown von 2 Sekunden für Tests
+        countdown(2);
+    
+        // Puffer leeren, falls vorher noch Eingaben offen sind
+        std::cin.clear();
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+    
+        // Benutzer fragen, ob eine neue Anfrage gesendet werden soll
+        std::string userInput;
+        while (true) {
+            std::cout << "Möchten Sie eine neue Anfrage senden? (ja/nein): ";
+            std::getline(std::cin, userInput);
+    
+            // Leerzeichen entfernen, um Probleme zu vermeiden
+            userInput.erase(std::remove_if(userInput.begin(), userInput.end(), ::isspace), userInput.end());
+    
+            if (userInput == "ja") {
+                break;  // Neue Anfrage wird gesendet
+            } else if (userInput == "nein") {
+                std::cout << "Programm beendet.\n";
+                return 0; // Beende das Programm
+            } else {
+                std::cout << "Ungültige Eingabe. Bitte 'ja' oder 'nein' eingeben.\n";
+            }
+        }
     }
-
-    return 0;
+    
+    
 }
+    
 
